@@ -1,15 +1,15 @@
 package application
 
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
+
+
 //parallel computing for affording 100GB data  // Repartition before joining:
 
 object SparkExample {
   def main(args: Array[String]): Unit = {
-    if (args.length != 2) {
-      System.exit(1)
-    }
 
-    val existingDatasetPath = args(0)
+//    val existingDatasetPath = args(0)
     // val newDatasetPath = args(1)
     val newDatasetPath = "C:\\Users\\Hp\\IdeaProjects\\Example\\src\\main\\scala\\updatedSalary.csv"
     val s3OutputPath = "" //no path till now
@@ -17,18 +17,44 @@ object SparkExample {
 
     val spark = SparkSession.builder()
       .appName("SparkExample")
-      .enableHiveSupport()
+      //.enableHiveSupport()
       .config("spark.master", "local") //here we can specify the clusters // or we can use garbage collection which
       // manages the allocation and release of memory for an application
       .getOrCreate()
+    import spark.implicits._
 
 
-    def preProcessDataset(datasetPath: String): Unit = {
+      def preProcessDataset(dataset: DataFrame): DataFrame = {
+          val preprocessedData = dataset
+            .withColumn("Value", regexp_replace($"Value", "€", ""))
+            .withColumn("Value", when($"Value".endsWith("M"), regexp_replace($"Value", "M", "") * 1000000)
+              .otherwise(when($"Value".endsWith("K"), regexp_replace($"Value", "K", "") * 1000)
+                .otherwise($"Value")))
+            .withColumn("Salary", when($"Salary".endsWith("M"), regexp_replace($"Salary", "M", "") * 1000000)
+              .otherwise(when($"Salary".endsWith("K"), regexp_replace($"Salary", "K", "") * 1000)
+                .otherwise($"Salary")))
+            .filter($"Name".isNotNull && $"Nationality".isNotNull)
+            .withColumn("Name", lower(trim($"Name")))
+            .withColumn("Nationality", lower(trim($"Nationality")))
+            .withColumn("Club", lower(trim($"Club")))
+            .columns.foldLeft(dataset) { (accDF, colName) =>
+                accDF.withColumn(colName, regexp_replace(col(colName), "\\s+", ""))
+            }
+            .withColumn("Value", regexp_replace($"Value", "[^\\d.]", ""))
+            .withColumn("Salary", regexp_replace($"Salary", "[^\\d.]", ""))
+            .withColumn("ProcessedSalary", when($"Salary".endsWith("M"), $"Salary" * 1000000)
+              .when($"Salary".endsWith("K"), $"Salary" * 1000)
+              .otherwise($"Salary"))
+
+          preprocessedData
+      }
 
 
-      //cleaning, removing euro sign, 'replace 'M' with 1000000 and 'K' with 1000 ,
-      // removing any no-name or no-nationality players
-
+      def writeOutputToCSV(data: DataFrame, outputPath: String): Unit = {
+      data.coalesce(1).write
+        .partitionBy("Continent")
+        .mode(SaveMode.Overwrite)
+        .csv(outputPath)
     }
 
     // Load the player dataset
@@ -43,13 +69,15 @@ object SparkExample {
       .toDF("Continent", "Country")
 
     // Join player dataset with countries' continent mapping
-    // TODO: Rename the dataset
-    // TODO: Dont exceed the line
+    // TODO: Rename the dataset -- done
+    // TODO: Dont exceed the line --done
     val FifaWithContinentData = playerData.join(countriesData, playerData("Nationality") === countriesData("Country"),
         "left")
       .drop("Country") // Drop the duplicate country column
 
-    FifaWithContinentData.show(50)
+    preProcessDataset(FifaWithContinentData).show(50)
+    //FifaWithContinentData.show(50)
+
 
     // Save the mixed data to CSV files partitioned by continent
     FifaWithContinentData.write
@@ -63,19 +91,23 @@ object SparkExample {
       .csv(newDatasetPath)
 
     // Join the updated salary data with the existing mixed data
-    // TODO: Consider having new players in the updated dataset
+    // TODO: Consider having new players in the updated dataset --done
+    //Join Type is the problem
     val updatedData = FifaWithContinentData.join(updatedSalaryData, Seq("Name", "Age", "Nationality",
-        "Fifa Score", "Club", "Value", "Continent"), "left")
+        "Fifa Score", "Club", "Value", "Continent"), "fullouter")
       .drop(FifaWithContinentData.col("Salary")) // Drop the current salary column
+      .withColumn("Value", coalesce($"Value", lit(""))) // Handle null Value column
 
-    // Save the updated mixed data to S3 partitioned by continent
     updatedData.coalesce(1).write
       .partitionBy("Continent")
       .mode(SaveMode.Overwrite)
-      .csv(updatedSalaryOutputPath)
+    writeOutputToCSV(updatedData, updatedSalaryOutputPath)
 
-    // TODO: Preprocess data, add new column for processed salary, clean unwanted data
-    // TODO: Apply this in a function
+
+
+
+    // TODO: Preprocess data, add new column for processed salary, clean unwanted data --done
+    // TODO: Apply this in a function --done
 
     //SUBSTR(Value, 2) is to extract the coin sign
     //SUBSTR(Value, -1) extracts the last character which is M or K
@@ -94,11 +126,11 @@ object SparkExample {
         |""".stripMargin
 
 
-      //TODO: FIX THIS
+      //TODO: FIX THIS --done "by Using Max instead of Sum"
     }
     val theMostValuablePlayerQuery =
       """
-        |SELECT Club, SUM(CASE WHEN SUBSTR(Value, -1) = 'M'
+        |SELECT Club, MAX(CASE WHEN SUBSTR(Value, -1) = 'M'
         |THEN CAST(SUBSTR(Value, 2, LENGTH(Value) - 2) AS DOUBLE) * 1000000
         |WHEN SUBSTR(Value, -1) = 'K' THEN CAST(SUBSTR(Value, 2, LENGTH(Value) - 2) AS DOUBLE) * 1000
         |ELSE CAST(SUBSTR(Value, 2) AS DOUBLE)
@@ -119,11 +151,28 @@ object SparkExample {
         |LIMIT 5;
         |""".stripMargin
 
+    val bestFifaContinentPlayerQuery =
+      """
+        |SELECT CASE
+        |WHEN Continent IN ('SA', 'NA') THEN 'America'
+        |ELSE Continent
+        |END AS CombinedContinent,
+        |AVG(`Fifa Score`) AS AverageFifaScore
+        |FROM mixed_data
+        |WHERE Continent IN ('EU', 'SA', 'NA')
+        |GROUP BY CombinedContinent
+        |ORDER BY AverageFifaScore DESC
+        |LIMIT 1;
+        |""".stripMargin
+
+
+  /*
+
     val bestContinentAvg =
       """
         |SELECT Continent, AVG(Fifa_Score) AS AverageFifaScore
         |FROM mixed_data
-        |WHERE Continent IN ('EU', 'AM')
+        |WHERE Continent IN ('EU', 'NA', 'SA')
         |GROUP BY Continent
         |""".stripMargin
 
@@ -140,37 +189,51 @@ object SparkExample {
         |LIMIT 1;
         |"""
 
+*/
+
+
     val aggregatedIncomeResult = spark.sql(topThreeCountriesQuery)
     val aggregatedValueResult = spark.sql(theMostValuablePlayerQuery)
     val aggregatedSalaryResult = spark.sql(topFiveSalariesClub)
-    val averageFifaScoreResult = spark.sql(bestContinentAvg)
-    val sumFifaScoreResult = spark.sql(bestContinentSum)
+    val bestFifaContinentResult = spark.sql(bestFifaContinentPlayerQuery)
+    //val averageFifaScoreResult = spark.sql(bestContinentAvg)
+    //val sumFifaScoreResult = spark.sql(bestContinentSum)
 
 
     println("The Top 3 countries that achieve the highest income through their players:")
+    writeOutputToCSV(aggregatedIncomeResult, "C:\\Users\\Hp\\IdeaProjects\\Example\\src\\main\\scala\\output")
     aggregatedIncomeResult.show()
 
     println("The Most Valuable Club:")
+    writeOutputToCSV(aggregatedValueResult, "C:\\Users\\Hp\\IdeaProjects\\Example\\src\\main\\scala\\output")
     aggregatedValueResult.show()
 
+
     println("Top 5 Clubs Salary Spending:")
+    writeOutputToCSV(aggregatedSalaryResult, "C:\\Users\\Hp\\IdeaProjects\\Example\\src\\main\\scala\\output")
     aggregatedSalaryResult.show()
 
-    println("The Best FIFA Score by Continent Using the Average Scores Values:")
+
+    println("The Best FIFA Score by Continent:")
+    writeOutputToCSV(bestFifaContinentResult, "C:\\Users\\Hp\\IdeaProjects\\Example\\src\\main\\scala\\output")
+    bestFifaContinentResult.show()
+
+    /*println("The Best FIFA Score by Continent Using the Average Scores Values:")
+    writeOutputToCSV(averageFifaScoreResult, "C:\\Users\\Hp\\IdeaProjects\\Example\\src\\main\\scala\\output")
     averageFifaScoreResult.show()
 
     println("The Best FIFA Score by Continent Using the Sum Scores Values:")
-    sumFifaScoreResult.show()
+    writeOutputToCSV(sumFifaScoreResult, "C:\\Users\\Hp\\IdeaProjects\\Example\\src\\main\\scala\\output")
+    sumFifaScoreResult.show() */
 
-    // ??????????????????????????????????????????????????????
+
+    /*
     spark.table("aggregatedIncomeResult").show()
     spark.table("aggregatedValueResult").show()
     spark.table("aggregatedSalaryResult").show()
     spark.table("averageFifaScoreResult").show()
     spark.table("sumFifaScoreResult").show()
-    // ??????????????????????????????????????????????????????
-
-
+    */
 
 
     spark.stop()
