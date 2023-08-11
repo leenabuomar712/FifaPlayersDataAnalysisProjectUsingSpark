@@ -1,7 +1,9 @@
 FIFA Players Analysis
+
 This is a Spark application that demonstrates data preprocessing and analysis using the Apache Spark framework. The application processes FIFA player data and performs various analytical tasks on the data.
 
 Getting Started
+
 To run the application, follow these steps:
 
 1. Clone the repository to your local machine:
@@ -25,6 +27,7 @@ spark-submit --class application.SparkExample --master local path/to/SparkExampl
 
 
 Preprocessing and Analysis
+
 The application performs the following preprocessing steps on the dataset:
 
 - Removes euro signs from value columns.
