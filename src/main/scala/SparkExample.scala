@@ -30,30 +30,32 @@ object SparkExample {
         .withColumn("Name", lower(trim($"Name")))
         .withColumn("Nationality", lower(trim($"Nationality")))
         .withColumn("Club", lower(trim($"Club")))
-        .columns.foldLeft(dataset) { (accDF, colName) =>
-          accDF.withColumn(colName, regexp_replace(col(colName), "\\s+", ""))
-        }
+
+      val columnsToClean = preprocessedData.columns
+      val cleanedData = columnsToClean.foldLeft(preprocessedData) { (accDF, colName) =>
+        accDF.withColumn(colName, regexp_replace(col(colName), "\\s+", ""))
+      }
+
+      val finalProcessedData = cleanedData
         .withColumn("Value", regexp_replace($"Value", "[^\\d.]", ""))
         .withColumn("Salary", regexp_replace($"Salary", "[^\\d.]", ""))
         .withColumn("ProcessedSalary", when($"Salary".endsWith("M"), $"Salary" * 1000000)
           .when($"Salary".endsWith("K"), $"Salary" * 1000)
           .otherwise($"Salary"))
 
-      preprocessedData
+      preprocessedData.show()
+      cleanedData.show()
+      finalProcessedData.show()
+
+      finalProcessedData
     }
 
-
-    def writeOutputToCSV(data: DataFrame, outputPath: String): Unit = {
-      data.coalesce(1).write
-        .partitionBy("Continent")
-        .mode(SaveMode.Overwrite)
-        .csv(outputPath)
-    }
 
     // Function to write DataFrame to CSV
     def writeResultToCSV(result: DataFrame, outputPath: String): Unit = {
-      result.coalesce(1).write.option("header", "true").csv(outputPath)
+      result.coalesce(1).write.mode(SaveMode.Overwrite).option("header", "true").csv(outputPath)
     }
+
 
     // Load the player dataset
     val playerData: DataFrame = spark.read
@@ -74,8 +76,6 @@ object SparkExample {
       .drop("Country") // Drop the duplicate country column
 
     preProcessDataset(FifaWithContinentData).show(50)
-    //FifaWithContinentData.show(50)
-
 
     // Save the mixed data to CSV files partitioned by continent
     FifaWithContinentData.write
@@ -88,7 +88,6 @@ object SparkExample {
       .option("header", "true")
       .csv(newDatasetPath)
 
-
     // Join the updated salary data with the existing mixed data
     // TODO: Consider having new players in the updated dataset --done
     //Join Type is the problem
@@ -100,13 +99,10 @@ object SparkExample {
     updatedData.coalesce(1).write
       .partitionBy("Continent")
       .mode(SaveMode.Overwrite)
-    writeOutputToCSV(updatedData, updatedSalaryOutputPath)
-
+    writeResultToCSV(updatedData, updatedSalaryOutputPath)
 
     // TODO: Preprocess data, add new column for processed salary, clean unwanted data --done
     // TODO: Apply this in a function --done
-
-
 
     FifaWithContinentData.createOrReplaceTempView("FifaContinentData")
 
@@ -195,6 +191,6 @@ object SparkExample {
     bestFifaContinentResult.show()
 
 
-
     spark.stop()
   }
+}
