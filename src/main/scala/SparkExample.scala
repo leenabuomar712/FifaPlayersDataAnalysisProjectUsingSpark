@@ -17,7 +17,8 @@ object SparkExample {
     
     def preProcessDataset(dataset: DataFrame): DataFrame = {
       val preprocessedData = dataset
-        .withColumn("Value", regexp_replace($"Value", "€", ""))
+        .withColumn("Value", regexp_replace($"Value", "[^a-zA-Z0-9]", ""))
+        .withColumn("Salary", regexp_replace($"Salary", "[^a-zA-Z0-9]", ""))
         .withColumn("Value", when($"Value".endsWith("M"), regexp_replace($"Value", "M", "") * 1000000)
           .otherwise(when($"Value".endsWith("K"), regexp_replace($"Value", "K", "") * 1000)
             .otherwise($"Value")))
@@ -29,14 +30,13 @@ object SparkExample {
         .withColumn("Nationality", lower(trim($"Nationality")))
         .withColumn("Club", lower(trim($"Club")))
 
+      preprocessedData.show
       val columnsToClean = preprocessedData.columns
       val cleanedData = columnsToClean.foldLeft(preprocessedData) { (accDF, colName) =>
         accDF.withColumn(colName, regexp_replace(col(colName), "\\s+", ""))
       }
 
       val finalProcessedData = cleanedData
-        .withColumn("Value", regexp_replace($"Value", "[^\\d.]", ""))
-        .withColumn("Salary", regexp_replace($"Salary", "[^\\d.]", ""))
         .withColumn("ProcessedSalary", when($"Salary".endsWith("M"), regexp_replace($"Salary", "M", "") * 1000000)
           .when($"Salary".endsWith("K"), regexp_replace($"Salary", "K", "") * 1000)
           .otherwise($"Salary"))
@@ -79,11 +79,12 @@ object SparkExample {
       .mode(SaveMode.Overwrite)
       .csv("output_directory")
 
+
+    FifaWithContinentData.show()
     // Load the updated salary data from the new dataset
     val updatedSalaryData: DataFrame = spark.read
       .option("header", "true")
       .csv(newDatasetPath)
-
 
     // Join the updated salary data with the existing entire data
     // TODO: Consider having new players in the updated dataset --done
@@ -99,6 +100,7 @@ object SparkExample {
 
     // TODO: Preprocess data, add new column for processed salary, clean unwanted data --done
     // TODO: Apply this in a function --done
+
     preProcessDataset(FifaWithContinentData).show(50)
 
     FifaWithContinentData.createOrReplaceTempView("FifaContinentData")
@@ -157,10 +159,12 @@ object SparkExample {
         |AVG(`Fifa Score`) AS AverageFifaScore
         |FROM FifaContinentData
         |WHERE Continent IN ('EU', 'SA', 'NA')
-        |GROUP BY CombinedContinent
+        |GROUP BY CASE
+        |WHEN Continent IN ('SA', 'NA') THEN 'America'
+        |ELSE Continent
+        |END
         |ORDER BY AverageFifaScore DESC
-        |LIMIT 1;
-        |""".stripMargin
+        |LIMIT 1; """.stripMargin
 
     val aggregatedIncomeResult = spark.sql(topThreeCountriesQuery)
     val aggregatedValueResult = spark.sql(theMostValuablePlayerQuery)
