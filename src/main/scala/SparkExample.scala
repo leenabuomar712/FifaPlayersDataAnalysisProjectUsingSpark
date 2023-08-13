@@ -11,7 +11,6 @@ object SparkExample {
 
     val spark = SparkSession.builder()
       .appName("SparkExample")
-      //.enableHiveSupport()
       .config("spark.master", "local")
       .getOrCreate()
     import spark.implicits._
@@ -50,12 +49,10 @@ object SparkExample {
       finalProcessedData
     }
 
-
     // Function to write DataFrame to CSV
     def writeResultToCSV(result: DataFrame, outputPath: String): Unit = {
       result.coalesce(1).write.mode(SaveMode.Overwrite).option("header", "true").csv(outputPath)
     }
-
 
     // Load the player dataset
     val playerData: DataFrame = spark.read
@@ -88,9 +85,8 @@ object SparkExample {
       .option("header", "true")
       .csv(newDatasetPath)
 
-    // Join the updated salary data with the existing mixed data
+    // Join the updated salary data with the existing entire data
     // TODO: Consider having new players in the updated dataset --done
-    //Join Type is the problem
     val updatedData = FifaWithContinentData.join(updatedSalaryData, Seq("Name", "Age", "Nationality",
         "Fifa Score", "Club", "Value", "Continent"), "fullouter")
       .drop(FifaWithContinentData.col("Salary")) // Drop the current salary column
@@ -108,7 +104,6 @@ object SparkExample {
 
     //SUBSTR(Value, 2) is to extract the coin sign
     //SUBSTR(Value, -1) extracts the last character which is M or K
-    //Execute the optimized Hive queries using Spark SQL API
     val topThreeCountriesQuery = {
       """
         |SELECT Nationality, SUM(CASE WHEN SUBSTR(Value, -1) = 'M'
