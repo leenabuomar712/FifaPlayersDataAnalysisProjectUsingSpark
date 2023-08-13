@@ -48,12 +48,12 @@ object SparkExample {
 
       finalProcessedData
     }
-
+    
     // Function to write DataFrame to CSV
     def writeResultToCSV(result: DataFrame, outputPath: String): Unit = {
       result.coalesce(1).write.mode(SaveMode.Overwrite).option("header", "true").csv(outputPath)
     }
-
+    
     // Load the player dataset
     val playerData: DataFrame = spark.read
       .option("header", "true")
