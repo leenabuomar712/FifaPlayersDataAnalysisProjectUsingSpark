@@ -37,8 +37,8 @@ object SparkExample {
       val finalProcessedData = cleanedData
         .withColumn("Value", regexp_replace($"Value", "[^\\d.]", ""))
         .withColumn("Salary", regexp_replace($"Salary", "[^\\d.]", ""))
-        .withColumn("ProcessedSalary", when($"Salary".endsWith("M"), $"Salary" * 1000000)
-          .when($"Salary".endsWith("K"), $"Salary" * 1000)
+        .withColumn("ProcessedSalary", when($"Salary".endsWith("M"), regexp_replace($"Salary", "M", "") * 1000000)
+          .when($"Salary".endsWith("K"), regexp_replace($"Salary", "K", "") * 1000)
           .otherwise($"Salary"))
 
       preprocessedData.show()
