@@ -14,8 +14,7 @@ object SparkExample {
       .config("spark.master", "local")
       .getOrCreate()
     import spark.implicits._
-
-
+    
     def preProcessDataset(dataset: DataFrame): DataFrame = {
       val preprocessedData = dataset
         .withColumn("Value", regexp_replace($"Value", "€", ""))
@@ -72,7 +71,7 @@ object SparkExample {
         "left")
       .drop("Country") // Drop the duplicate country column
 
-    preProcessDataset(FifaWithContinentData).show(50)
+    //preProcessDataset(FifaWithContinentData).show(50)
 
     // Save the mixed data to CSV files partitioned by continent
     FifaWithContinentData.write
@@ -84,6 +83,7 @@ object SparkExample {
     val updatedSalaryData: DataFrame = spark.read
       .option("header", "true")
       .csv(newDatasetPath)
+
 
     // Join the updated salary data with the existing entire data
     // TODO: Consider having new players in the updated dataset --done
@@ -99,6 +99,7 @@ object SparkExample {
 
     // TODO: Preprocess data, add new column for processed salary, clean unwanted data --done
     // TODO: Apply this in a function --done
+    preProcessDataset(FifaWithContinentData).show(50)
 
     FifaWithContinentData.createOrReplaceTempView("FifaContinentData")
 
