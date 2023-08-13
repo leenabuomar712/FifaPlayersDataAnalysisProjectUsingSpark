@@ -167,7 +167,6 @@ object SparkExample {
     val aggregatedSalaryResult = spark.sql(topFiveSalariesClub)
     val bestFifaContinentResult = spark.sql(bestFifaContinentPlayerQuery)
 
-
     println("The Top 3 countries that achieve the highest income through their players:")
     writeResultToCSV(aggregatedIncomeResult, "C:\\Users\\Hp\\IdeaProjects\\Example\\src\\main\\scala\\Query1_Output")
     aggregatedIncomeResult.show()
@@ -175,13 +174,11 @@ object SparkExample {
     println("The Most Valuable Club:")
     writeResultToCSV(aggregatedValueResult, "C:\\Users\\Hp\\IdeaProjects\\Example\\src\\main\\scala\\Query2_output")
     aggregatedValueResult.show()
-
-
+    
     println("Top 5 Clubs Salary Spending:")
     writeResultToCSV(aggregatedSalaryResult, "C:\\Users\\Hp\\IdeaProjects\\Example\\src\\main\\scala\\Query3_Output")
     aggregatedSalaryResult.show()
-
-
+    
     println("The Best FIFA Score by Continent:")
     writeResultToCSV(bestFifaContinentResult, "C:\\Users\\Hp\\IdeaProjects\\Example\\src\\main\\scala\\Query4_Output")
     bestFifaContinentResult.show()
