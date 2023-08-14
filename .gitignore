@@ -5,4 +5,8 @@
 /target/scala-2.13/classes/output_directoy
 /build.sbt
 /output.csv
+.idea/
+target/
+*.log
+.bsp/
 
