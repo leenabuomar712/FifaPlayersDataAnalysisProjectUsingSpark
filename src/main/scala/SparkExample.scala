@@ -174,12 +174,18 @@ object SparkExample {
         "fullouter")
 
     /**
-    * Use coalesce to merge values based on conditions
+    * Use coalesce to merge values based on conditions,
+     * we should keep in mind the updating for the salary values may cause null values,
+     * to deal with this issue, the 'when' condition was applied 
+     * the salary is updated only if there is a non-null value in the "UpdatedSalary" column.
+     * If "UpdatedSalary" is null, we'll keep the existing salary value
      */
     val mergedData = updatedData
-      .withColumn("Value", coalesce(updatedData("Value"), aliasedUpdatedSalaryData("Value")))
-      .withColumn("Salary", coalesce(FifaWithContinentData("Salary"),
-        aliasedUpdatedSalaryData("UpdatedSalary")))
+      .withColumn("Value", coalesce(aliasedUpdatedSalaryData("Value"), updatedData("Value")))
+      .withColumn("Salary", coalesce(
+        when(aliasedUpdatedSalaryData("UpdatedSalary").isNotNull, aliasedUpdatedSalaryData("UpdatedSalary"))
+          .otherwise(updatedData("Salary"))))
+
     mergedData.show()
     writeResultToCSV(mergedData, updatedSalaryOutputPath)
 
