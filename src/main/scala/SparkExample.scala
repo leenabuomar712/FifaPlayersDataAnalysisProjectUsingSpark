@@ -98,6 +98,7 @@ object SparkExample {
     preprocessedData.show()
     cleanedData
   }
+
   def main(args: Array[String]): Unit = {
 
     // TODO: Create a new package, called utils.Constants
